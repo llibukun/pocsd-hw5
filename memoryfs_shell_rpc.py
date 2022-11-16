@@ -1,3 +1,11 @@
+# Layiwola Ibukun
+# Tashfique Choudhury
+
+# POCSD - EEL5737 Principles of Computer System Design
+# Homework 5 - RAID 5 Server Model
+# Due: Friday, December 2nd, 2022
+# memoryfs_shell_rpc.py
+
 import pickle, logging
 import argparse
 import time
@@ -222,6 +230,7 @@ class FSShell():
       print ("Error: " + errorcode)
       return -1
     return 0
+  
   # implements soft link
   def lns(self, target, name):
     i, errorcode = self.FileObject.Symlink(target, name, self.cwd)
@@ -339,16 +348,15 @@ if __name__ == "__main__":
   # Change logging level to INFO to remove debugging messages
   logging.basicConfig(filename='memoryfs.log', filemode='w', level=logging.DEBUG)
 
-
   # Construct the argument parser
   ap = argparse.ArgumentParser()
   
-
   ap.add_argument('-nb', '--total_num_blocks', type=int, help='an integer value')
   ap.add_argument('-bs', '--block_size', type=int, help='an integer value')
   ap.add_argument('-ni', '--max_num_inodes', type=int, help='an integer value')
   ap.add_argument('-is', '--inode_size', type=int, help='an integer value')
-  # add port and client id
+  
+  # add number of servers, startport and client id
   ap.add_argument('-ns', '--ns', type=int, help='an integer value')
   ap.add_argument('-startport', '--startport', type=int, help='an integer value')
   ap.add_argument('-cid', '--cid', type=int, help='an integer value')
@@ -366,7 +374,6 @@ if __name__ == "__main__":
   # no need to initialize blocks; they are initialized server-side 
   # boot_block = b'\x12\x34\x56\x78' # constant 12345678 stored as beginning of boot block; no need to change this
   # RawBlocks.InitializeBlocks(boot_block)
-
 
   # Print file system information and contents of first few blocks to memoryfs.log
   RawBlocks.PrintFSInfo()

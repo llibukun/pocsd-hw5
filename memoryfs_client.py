@@ -1,6 +1,13 @@
+# Layiwola Ibukun
+# Tashfique Choudhury
+
+# POCSD - EEL5737 Principles of Computer System Design
+# Homework 5 - RAID 5 Server Model
+# Due: Friday, December 2nd, 2022
+# memoryfs_client.py
+
 import pickle, logging 
 import xmlrpc.client, socket, time
-
 
 # For locks: RSM_UNLOCKED=0 , RSM_LOCKED=1 
 RSM_UNLOCKED = bytearray(b'\x00') * 1
@@ -86,7 +93,8 @@ INODE_TYPE_SYM = 3
 # Now the disk block data is remote, in the server - DiskBlocks() is a client
 # args contains the command-line arguments passed from the memoryfs_shell.py invocation:
 # cid: client ID
-# port: server port
+# ns: number of servers
+# startport: root server port number
 
 class DiskBlocks():
   def __init__(self, args):
@@ -94,43 +102,41 @@ class DiskBlocks():
     # initialize clientID 
     if args.cid>=0 and args.cid<MAX_CLIENTS:
       self.clientID = args.cid
+
     else:
       print('Must specify valid cid')
       quit()
 
-    # initialize XMLRPC client connection to raw block server
+    # number of servers
     if args.ns:
-        N = args.ns
-        if args.startport:
-          PORT = args.startport
-        else:
-          print('Must specify port number')
-          quit()
-        self.block_servers = []
-        for i in range(N):
-            server_url = 'http://' + SERVER_ADDRESS + ':' + str(PORT+i)
-            self.block_servers.append(xmlrpc.client.ServerProxy(server_url, use_builtin_types=True))
-            # print(self.block_servers[0]s)
-        socket.setdefaulttimeout(SOCKET_TIMEOUT)
-    
-        self.HandleFSConstants(args)
+      N = args.ns
+
     else:
-      print('Must specify valid ns')
+      print('Must specify number of servers')
       quit()
 
-# Old
-#class DiskBlocks():
-#  def __init__(self, args):
-#
-#    self.HandleFSConstants(args)
-#    # This class stores the raw block array
-#    self.block = []                                            
-#    # Initialize raw blocks 
-#    for i in range (0, TOTAL_NUM_BLOCKS):
-#      putdata = bytearray(BLOCK_SIZE)
-#      self.block.insert(i,putdata)
+    # port number of root server
+    if args.startport:
+      PORT = args.startport
 
-  #HandleFSConstants: Modify the FS constants if provided in command line argument
+    else:
+      print('Must specify root server port number')
+      quit()
+
+    # initialize XMLRPC client connection to N block servers
+    self.block_servers = []
+    
+    # create N servers
+    for i in range(0, N):
+      server_url = 'http://' + SERVER_ADDRESS + ':' + str(PORT+i)
+      self.block_servers.append(xmlrpc.client.ServerProxy(server_url, use_builtin_types=True))
+
+    # set socket timeout and handle fs constants
+    socket.setdefaulttimeout(SOCKET_TIMEOUT) 
+    self.HandleFSConstants(args)
+
+
+  # HandleFSConstants: Modify the FS constants if provided in command line argument
 
   def HandleFSConstants(self, args):
 
@@ -189,7 +195,8 @@ class DiskBlocks():
 
   def Put(self, block_number, block_data):
 
-    logging.debug ('Put: block number ' + str(block_number) + ' len ' + str(len(block_data)) + '\n' + str(block_data.hex()))
+    logging.debug('Put: block number ' + str(block_number) + ' len ' + str(len(block_data)) + '\n' + str(block_data.hex()))
+
     if len(block_data) > BLOCK_SIZE:
       logging.error('Put: Block larger than BLOCK_SIZE: ' + str(len(block_data)))
       quit()
@@ -197,104 +204,59 @@ class DiskBlocks():
     if block_number in range(0,TOTAL_NUM_BLOCKS): 
       # ljust does the padding with zeros
       putdata = bytearray(block_data.ljust(BLOCK_SIZE,b'\x00'))
-      # Write block
-      # commenting this out as the request now goes to the server
-      # self.block[block_number] = putdata
-      # call Put() method on the server; code currently quits on any server failure 
-      for i in range(len(self.block_servers)):
-         ret = self.block_servers[i].Put(block_number,putdata)
-         
-      if ret == -1:
-        logging.error('Put: Server returns error')
-        quit()
+      
+      # call Put() method for all servers; code quits on any server failure 
+      for i in range(0, len(self.block_servers)):
+        ret = self.block_servers[i].SinglePut(block_number,putdata)
+        # print(f" called put in server {i}")
+
+        if ret == -1:
+          logging.error(f'SinglePut: Server {i} returns error')
+          quit()
+
       return 0
+
     else:
       logging.error('Put: Block out of range: ' + str(block_number))
       quit()
 
-  def SinglePut(self, block_number, block_data):
-
-    logging.debug ('Put: block number ' + str(block_number) + ' len ' + str(len(block_data)) + '\n' + str(block_data.hex()))
-    if len(block_data) > BLOCK_SIZE:
-      logging.error('Put: Block larger than BLOCK_SIZE: ' + str(len(block_data)))
-      quit()
-
-    if block_number in range(0,TOTAL_NUM_BLOCKS): 
-      # ljust does the padding with zeros
-      putdata = bytearray(block_data.ljust(BLOCK_SIZE,b'\x00'))
-      # Write block
-      # commenting this out as the request now goes to the server
-      # self.block[block_number] = putdata
-      # call Put() method on the server; code currently quits on any server failure 
-      ret = self.block_servers[0].Put(block_number,putdata)
-      if ret == -1:
-        logging.error('Put: Server returns error')
-        quit()
-      return 0
-    else:
-      logging.error('Put: Block out of range: ' + str(block_number))
-      quit()
-
-## Get: interface to read a raw block of data from block indexed by block number
-## Equivalent to the textbook's BLOCK_NUMBER_TO_BLOCK(b)
+  ## Get: interface to read a raw block of data from block indexed by block number
+  ## Equivalent to the textbook's BLOCK_NUMBER_TO_BLOCK(b)
 
   def Get(self, block_number):
 
     logging.debug ('Get: ' + str(block_number))
+
     if block_number in range(0,TOTAL_NUM_BLOCKS):
-      # logging.debug ('\n' + str((self.block[block_number]).hex()))
-      # commenting this out as the request now goes to the server
-      # return self.block[block_number]
-      # call Get() method on the server
+      # call Get() method one server at a time - returning if data is good
       for i in range(len(self.block_servers)):
-         data = self.block_servers[i].Get(block_number)
-      # return as bytearray
-      return bytearray(data)
+        data = self.block_servers[i].SingleGet(block_number)
+
+        if data != -1: # we come out of the loop if checksum is valid
+          break
+
+      if data != -1:
+        # return as bytearray
+        return bytearray(data)
 
     logging.error('Get: Block number larger than TOTAL_NUM_BLOCKS: ' + str(block_number))
-    quit()
-    
-    
-  def SingleGet(self, block_number):
+    quit() 
 
-    logging.debug ('Get: ' + str(block_number))
-    if block_number in range(0,TOTAL_NUM_BLOCKS):
-      # logging.debug ('\n' + str((self.block[block_number]).hex()))
-      # commenting this out as the request now goes to the server
-      # return self.block[block_number]
-      # call Get() method on the server
-      data = self.block_servers[0].Get(block_number)
-      # return as bytearray
-      return bytearray(data)
-
-    logging.error('Get: Block number larger than TOTAL_NUM_BLOCKS: ' + str(block_number))
-    quit()    
-
-## RSM: read and set memory equivalent
+  ## RSM: read and set memory equivalent
 
   def RSM(self, block_number):
 
     logging.debug ('RSM: ' + str(block_number))
-    if block_number in range(0,TOTAL_NUM_BLOCKS):
-      for i in range(len(self.block_servers)):  
-         data = self.block_servers[i].RSM(block_number)
 
+    if block_number in range(0, TOTAL_NUM_BLOCKS):
+      data = self.block_servers[0].SingleRSM(block_number)
       return bytearray(data)
 
     logging.error('RSM: Block number larger than TOTAL_NUM_BLOCKS: ' + str(block_number))
     quit()
 
-  def SingleRSM(self, block_number):
-
-    logging.debug ('RSM: ' + str(block_number))
-    if block_number in range(0,TOTAL_NUM_BLOCKS):
-      data = self.block_servers[0].RSM(block_number)
-
-      return bytearray(data)
-
-    logging.error('RSM: Block number larger than TOTAL_NUM_BLOCKS: ' + str(block_number))
-    quit()
-## Acquire and Release using a disk block lock
+  
+  ## Acquire and Release using a disk block lock
 
   def Acquire(self):
 
@@ -314,7 +276,7 @@ class DiskBlocks():
     return 0
 
 
-## Serializes and saves block[] data structure to a disk file
+  ## Serializes and saves block[] data structure to a disk file
 
   def DumpToDisk(self, filename):
 

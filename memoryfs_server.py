@@ -1,8 +1,17 @@
+# Layiwola Ibukun
+# Tashfique Choudhury
+
+# POCSD - EEL5737 Principles of Computer System Design
+# Homework 5 - RAID 5 Server Model
+# Due: Friday, December 2nd, 2022
+# memoryfs_server.py
+
 import pickle, logging
 import argparse
 import time
 import dbm
 import os.path
+import hashlib # for checksums
 
 # For locks: RSM_UNLOCKED=0 , RSM_LOCKED=1 
 RSM_UNLOCKED = bytearray(b'\x00') * 1
@@ -18,11 +27,16 @@ class RequestHandler(SimpleXMLRPCRequestHandler):
 class DiskBlocks():
   def __init__(self, total_num_blocks, block_size):
     # This class stores the raw block array
-    self.block = []                                            
+    self.block = []  
+    # This stores the checksum for each block
+    self.checksum = {}  
+
     # Initialize raw blocks 
     for i in range (0, total_num_blocks):
       putdata = bytearray(block_size)
       self.block.insert(i,putdata)
+      self.checksum[i] = hashlib.md5(putdata)
+
 
 if __name__ == "__main__":
 
@@ -60,25 +74,47 @@ if __name__ == "__main__":
   # Create server
   server = SimpleXMLRPCServer(("127.0.0.1", PORT), requestHandler=RequestHandler) 
 
-  def Get(block_number):
+  def SingleGet(block_number):
     result = RawBlocks.block[block_number]
-    return result
+    # logging.debug('\n' + str((Rawblocks.block[block_number]).hex()))
 
-  server.register_function(Get)
+    # compare old and new checksum
+    if RawBlocks.checksum[block_number].digest() == hashlib.md5(result).digest():
+      return result
 
-  def Put(block_number, data):
+    # On Checksum Error
+    print("SingleGet: Checksum error")
+    return -1
+
+  server.register_function(SingleGet)
+
+  def SinglePut(block_number, data):
     RawBlocks.block[block_number] = data.data
+    RawBlocks.checksum[block_number] = hashlib.md5(data.data)
+
     return 0
 
-  server.register_function(Put)
+  server.register_function(SinglePut)
 
-  def RSM(block_number):
+  def SingleRSM(block_number):
+    # Get the RSM Block
     result = RawBlocks.block[block_number]
-    # RawBlocks.block[block_number] = RSM_LOCKED
-    RawBlocks.block[block_number] = bytearray(RSM_LOCKED.ljust(BLOCK_SIZE,b'\x01'))
-    return result
 
-  server.register_function(RSM)
+    # compare old and new checksum
+    if RawBlocks.checksum[block_number].digest() == hashlib.md5(result).digest():
+      # Put RSM_LOCKED - do the RSM locking 
+      MYRSMLOCK = bytearray(RSM_LOCKED.ljust(BLOCK_SIZE,b'\x01'))
+      RawBlocks.block[block_number] = MYRSMLOCK
+      RawBlocks.checksum[block_number] = hashlib.md5(MYRSMLOCK)
+
+      return result
+
+    # On Checksum Error
+    print("SingleRSM: Checksum error")
+    return -1
+
+
+  server.register_function(SingleRSM)
 
   # Run the server's main loop
   print ("Running block server with nb=" + str(TOTAL_NUM_BLOCKS) + ", bs=" + str(BLOCK_SIZE) + " on port " + str(PORT))
