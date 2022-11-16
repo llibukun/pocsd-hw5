@@ -1,7 +1,6 @@
 import pickle, logging 
 import xmlrpc.client, socket, time
 
-# eeuvdkwkdvs
 
 # For locks: RSM_UNLOCKED=0 , RSM_LOCKED=1 
 RSM_UNLOCKED = bytearray(b'\x00') * 1
