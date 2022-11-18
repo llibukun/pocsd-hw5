@@ -46,6 +46,7 @@ if __name__ == "__main__":
   ap.add_argument('-nb', '--total_num_blocks', type=int, help='an integer value')
   ap.add_argument('-bs', '--block_size', type=int, help='an integer value')
   ap.add_argument('-port', '--port', type=int, help='an integer value')
+  ap.add_argument('-cblk', '--cblk', default=-1, type=int, help='an integer value')
 
   args = ap.parse_args()
 
@@ -67,6 +68,9 @@ if __name__ == "__main__":
     print('Must specify port number')
     quit()
 
+  if args.cblk:
+    CORRUPT_BLOCK = args.cblk
+
 
   # initialize blocks
   RawBlocks = DiskBlocks(TOTAL_NUM_BLOCKS, BLOCK_SIZE)
@@ -74,7 +78,11 @@ if __name__ == "__main__":
   # Create server
   server = SimpleXMLRPCServer(("127.0.0.1", PORT), requestHandler=RequestHandler) 
 
-  def SingleGet(block_number):
+  def SingleGet(block_number): 
+    # artificial decay
+    if block_number == CORRUPT_BLOCK:
+      RawBlocks.block[block_number][:4] = bytearray(b'\xFF\x00\xF0\x0F')
+
     result = RawBlocks.block[block_number]
     # logging.debug('\n' + str((Rawblocks.block[block_number]).hex()))
 

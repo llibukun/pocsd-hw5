@@ -207,12 +207,13 @@ class DiskBlocks():
       
       # call Put() method for all servers; code quits on any server failure 
       for i in range(0, len(self.block_servers)):
-        ret = self.block_servers[i].SinglePut(block_number,putdata)
-        # print(f" called put in server {i}")
+        try:
+          ret = self.block_servers[i].SinglePut(block_number,putdata)
 
-        if ret == -1:
-          logging.error(f'SinglePut: Server {i} returns error')
-          quit()
+        # print(f" called put in server {i}")
+        except ConnectionRefusedError:
+          print(f"SERVER_DISCONNECTED PUT {i}")
+          continue
 
       return 0
 
@@ -230,14 +231,21 @@ class DiskBlocks():
     if block_number in range(0,TOTAL_NUM_BLOCKS):
       # call Get() method one server at a time - returning if data is good
       for i in range(len(self.block_servers)):
-        data = self.block_servers[i].SingleGet(block_number)
+        try:
+          data = self.block_servers[i].SingleGet(block_number)
 
-        if data != -1: # we come out of the loop if checksum is valid
-          break
+          if data == -1:
+            print(f"CORRUPTED_BLOCK {block_number}")
+            break
 
-      if data != -1:
-        # return as bytearray
-        return bytearray(data)
+          else:
+            return bytearray(data)
+
+        except ConnectionRefusedError:
+          print(f"SERVER_DISCONNECTED GET {i}")
+          continue
+
+      return -1
 
     logging.error('Get: Block number larger than TOTAL_NUM_BLOCKS: ' + str(block_number))
     quit() 
@@ -249,13 +257,17 @@ class DiskBlocks():
     logging.debug ('RSM: ' + str(block_number))
 
     if block_number in range(0, TOTAL_NUM_BLOCKS):
-      data = self.block_servers[0].SingleRSM(block_number)
-      return bytearray(data)
+      try:
+        data = self.block_servers[0].SingleRSM(block_number)
+        return bytearray(data)
+
+      except ConnectionRefusedError:
+        print("SERVER_DISCONNECTED RSM 0")
 
     logging.error('RSM: Block number larger than TOTAL_NUM_BLOCKS: ' + str(block_number))
     quit()
 
-  
+
   ## Acquire and Release using a disk block lock
 
   def Acquire(self):
