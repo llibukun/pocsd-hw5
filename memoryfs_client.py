@@ -190,8 +190,23 @@ class DiskBlocks():
     # Number of filename+inode entries that can be stored in a single block
     FILE_ENTRIES_PER_DATA_BLOCK = BLOCK_SIZE // FILE_NAME_DIRENTRY_SIZE
 
+
+  ## LocateBlock: this converts a virtual block number into a server number, and a physical block on that server
+  ## Returns: a tuple (server number, block number)
+
+  def LocateBlock(self, block_number, N):
+    # calculate physical location of the block
+    offset1 = block_number // N
+    offset2 = block_number // (N*(N-1))
+    phy_position = block_number + offset1 + offset2 + 1
+    server_num = phy_position % N
+    phy_block_num = phy_position // N
+
+    # print(f"server_num, phy_block_num = {server_num}, {phy_block_num}")
+    return server_num, phy_block_num
+
   ## Put: interface to write a raw block of data to the block indexed by block number
-## Blocks are padded with zeroes up to BLOCK_SIZE
+  ## Blocks are padded with zeroes up to BLOCK_SIZE
 
   def Put(self, block_number, block_data):
 
@@ -204,21 +219,19 @@ class DiskBlocks():
     if block_number in range(0,TOTAL_NUM_BLOCKS): 
       # ljust does the padding with zeros
       putdata = bytearray(block_data.ljust(BLOCK_SIZE,b'\x00'))
+      server_num, phy_block_num = self.LocateBlock(block_number, len(self.block_servers))
       
       # call Put() method for all servers; code quits on any server failure 
-      for i in range(0, len(self.block_servers)):
-        try:
-          ret = self.block_servers[i].SinglePut(block_number,putdata)
+      try:
+        ret = self.block_servers[server_num].SinglePut(phy_block_num, putdata)
 
-        # print(f" called put in server {i}")
-        except ConnectionRefusedError:
-          print(f"SERVER_DISCONNECTED PUT {i}")
-          continue
+      except ConnectionRefusedError:
+        print(f"SERVER_DISCONNECTED PUT {server_num}")
 
       return 0
 
     else:
-      logging.error('Put: Block out of range: ' + str(block_number))
+      logging.error('Put: Block out of range: ' + str(phy_block_num))
       quit()
 
   ## Get: interface to read a raw block of data from block indexed by block number
@@ -230,20 +243,18 @@ class DiskBlocks():
 
     if block_number in range(0,TOTAL_NUM_BLOCKS):
       # call Get() method one server at a time - returning if data is good
-      for i in range(len(self.block_servers)):
-        try:
-          data = self.block_servers[i].SingleGet(block_number)
+      server_num, phy_block_num = self.LocateBlock(block_number, len(self.block_servers))
 
-          if data == -1:
-            print(f"CORRUPTED_BLOCK {block_number}")
-            break
+      try:
+        data = self.block_servers[server_num].SingleGet(phy_block_num)
 
-          else:
-            return bytearray(data)
+        if data == -1:
+          print(f"CORRUPTED_BLOCK {block_number}")
+        else:
+          return bytearray(data)
 
-        except ConnectionRefusedError:
-          print(f"SERVER_DISCONNECTED GET {i}")
-          continue
+      except ConnectionRefusedError:
+        print(f"SERVER_DISCONNECTED GET {server_num}")
 
       return -1
 
@@ -257,12 +268,14 @@ class DiskBlocks():
     logging.debug ('RSM: ' + str(block_number))
 
     if block_number in range(0, TOTAL_NUM_BLOCKS):
+      server_num, phy_block_num = self.LocateBlock(block_number, len(self.block_servers))
+      
       try:
-        data = self.block_servers[0].SingleRSM(block_number)
+        data = self.block_servers[server_num].SingleRSM(phy_block_num)
         return bytearray(data)
 
       except ConnectionRefusedError:
-        print("SERVER_DISCONNECTED RSM 0")
+        print(f"SERVER_DISCONNECTED RSM {server_num}")
 
     logging.error('RSM: Block number larger than TOTAL_NUM_BLOCKS: ' + str(block_number))
     quit()
