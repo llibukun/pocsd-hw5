@@ -78,7 +78,10 @@ if __name__ == "__main__":
   # Create server
   server = SimpleXMLRPCServer(("127.0.0.1", PORT), requestHandler=RequestHandler) 
 
-  def SingleGet(block_number): 
+  def SingleGet(block_number):
+    # debugging
+    print("Invoked Server GET") 
+
     # artificial decay
     if block_number == CORRUPT_BLOCK:
       RawBlocks.block[block_number][:4] = bytearray(b'\xFF\x00\xF0\x0F')
@@ -97,14 +100,19 @@ if __name__ == "__main__":
   server.register_function(SingleGet)
 
   def SinglePut(block_number, data):
+    # debugging
+    print("Invoked Server PUT")
+
     RawBlocks.block[block_number] = data.data
     RawBlocks.checksum[block_number] = hashlib.md5(data.data)
-
     return 0
 
   server.register_function(SinglePut)
 
   def SingleRSM(block_number):
+    # debugging
+    print("Invoked Server RSM")
+    
     # Get the RSM Block
     result = RawBlocks.block[block_number]
 

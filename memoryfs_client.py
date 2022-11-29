@@ -202,7 +202,7 @@ class DiskBlocks():
     server_num = phy_position % N
     phy_block_num = phy_position // N
 
-    # print(f"server_num, phy_block_num = {server_num}, {phy_block_num}")
+    # print(f"loc = server {server_num}, block_num {phy_block_num}")
     return server_num, phy_block_num
 
   ## Put: interface to write a raw block of data to the block indexed by block number
@@ -269,7 +269,7 @@ class DiskBlocks():
 
     if block_number in range(0, TOTAL_NUM_BLOCKS):
       server_num, phy_block_num = self.LocateBlock(block_number, len(self.block_servers))
-      
+
       try:
         data = self.block_servers[server_num].SingleRSM(phy_block_num)
         return bytearray(data)
