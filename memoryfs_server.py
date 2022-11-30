@@ -80,7 +80,7 @@ if __name__ == "__main__":
 
   def Get(block_number):
     # debugging
-    print("Invoked Server GET") 
+    print("Invoked -GET") 
 
     # artificial decay
     if block_number == CORRUPT_BLOCK:
@@ -101,7 +101,7 @@ if __name__ == "__main__":
 
   def Put(block_number, data):
     # debugging
-    print("Invoked Server PUT")
+    print("Invoked ---PUT")
 
     RawBlocks.block[block_number] = data.data
     RawBlocks.checksum[block_number] = hashlib.md5(data.data)
@@ -111,7 +111,7 @@ if __name__ == "__main__":
 
   def RSM(block_number):
     # debugging
-    print("Invoked Server RSM")
+    print("Invoked -----RSM")
     
     # Get the RSM Block
     result = RawBlocks.block[block_number]

@@ -191,7 +191,7 @@ class DiskBlocks():
     FILE_ENTRIES_PER_DATA_BLOCK = BLOCK_SIZE // FILE_NAME_DIRENTRY_SIZE
 
 
-  ## LocateBlock: this converts a virtual block number into a server number, and a physical block on that server
+  ## LocateData: this converts a virtual block number into a server number, and a physical block on that server
   ## Returns: a tuple (server number, block number)
 
   def LocateData(self, block_number, N):
@@ -211,7 +211,7 @@ class DiskBlocks():
 
   def LocateParity(self, phy_block_num, N):
     # calculate physical location of the block
-    parity_block = phy_block_num // N
+    parity_block = phy_block_num
     parity_server = parity_block % N
 
     print(f"Parity location = server {parity_server}, block_num {parity_block}")
@@ -221,10 +221,10 @@ class DiskBlocks():
   ## SinglePut: interface to write a raw block of data to the block indexed by block number
   ## Blocks are padded with zeroes up to BLOCK_SIZE
 
-  def SinglePut(self, server_num, block_number, block_data):
+  def SinglePut(self, server_num, phy_block_num, block_data):
     try:
       # call server Put() method 
-      self.block_servers[server_num].Put(block_number, block_data)
+      self.block_servers[server_num].Put(phy_block_num, block_data)
 
     except ConnectionRefusedError:
       print(f"SERVER_DISCONNECTED PUT {server_num}")
@@ -269,6 +269,28 @@ class DiskBlocks():
     else:
       logging.error('Put: Block out of range: ' + str(block_number))
       quit()
+
+  ## RepairServer: Will repair a previously crashed server that has been brought back up using XORs from other servers
+  ## No return value
+
+  def RepairServer(self, server_num): 
+    N = len(self.block_servers)
+
+    for phy_block_num in range(0, TOTAL_NUM_BLOCKS//(N-1)):
+      rec_data = bytearray(BLOCK_SIZE)
+
+      # Get() from other servers in the same row and XOR them together
+      for other_server in range(0, N):
+        if other_server != server_num:
+          data = self.block_servers[other_server].Get(phy_block_num)
+          
+          for ii in range(0, BLOCK_SIZE):
+            rec_data[ii] = rec_data[ii] ^ data[ii]  
+      
+      self.block_servers[server_num].Put(phy_block_num, rec_data)
+
+    return 0
+
 
   ## SingleGet: interface to read a raw block of data from block indexed by block number
   ## Equivalent to the textbook's BLOCK_NUMBER_TO_BLOCK(b)

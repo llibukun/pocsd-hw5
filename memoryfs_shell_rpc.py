@@ -239,6 +239,10 @@ class FSShell():
       return -1
     return 0
 
+  # implements server repair
+  def repair(self, server_ID):
+    self.FileObject.RawBlocks.RepairServer(int(server_ID))
+    return 0
 
   def Interpreter(self):
     while (True):
@@ -335,6 +339,13 @@ class FSShell():
         else:
           self.FileObject.RawBlocks.Acquire()
           self.lns(splitcmd[1], splitcmd[2])
+          self.FileObject.RawBlocks.Release()
+      elif splitcmd[0] == "repair":
+        if len(splitcmd) != 2:
+          print ("Error: repair requires one argument")
+        else:
+          self.FileObject.RawBlocks.Acquire()
+          self.repair(splitcmd[1])
           self.FileObject.RawBlocks.Release()
       elif splitcmd[0] == "exit":
         return
