@@ -194,7 +194,7 @@ class DiskBlocks():
   ## LocateBlock: this converts a virtual block number into a server number, and a physical block on that server
   ## Returns: a tuple (server number, block number)
 
-  def LocateBlock(self, block_number, N):
+  def LocateData(self, block_number, N):
     # calculate physical location of the block
     offset1 = block_number // N
     offset2 = block_number // (N*(N-1))
@@ -202,11 +202,38 @@ class DiskBlocks():
     server_num = phy_position % N
     phy_block_num = phy_position // N
 
-    # print(f"loc = server {server_num}, block_num {phy_block_num}")
+    print(f"Data location = server {server_num}, block_num {phy_block_num}")
     return server_num, phy_block_num
 
-  ## Put: interface to write a raw block of data to the block indexed by block number
+
+  ## LocateParity: this locates the corresponding parity block for a given physical block -> parity server number, and a parity block on the same row
+  ## Returns: a tuple (server number, block number)
+
+  def LocateParity(self, phy_block_num, N):
+    # calculate physical location of the block
+    parity_block = phy_block_num // N
+    parity_server = parity_block % N
+
+    print(f"Parity location = server {parity_server}, block_num {parity_block}")
+    return parity_server, parity_block
+
+
+  ## SinglePut: interface to write a raw block of data to the block indexed by block number
   ## Blocks are padded with zeroes up to BLOCK_SIZE
+
+  def SinglePut(self, server_num, block_number, block_data):
+    try:
+      # call server Put() method 
+      self.block_servers[server_num].Put(block_number, block_data)
+
+    except ConnectionRefusedError:
+      print(f"SERVER_DISCONNECTED PUT {server_num}")
+
+    return 0
+
+
+  ## Put (AKA Raid_Put): uses the RAID server model to Put() data to the server given a virtual block number and the block_data
+  ## Errors are handled by lower level Puts() and Gets()
 
   def Put(self, block_number, block_data):
 
@@ -216,50 +243,78 @@ class DiskBlocks():
       logging.error('Put: Block larger than BLOCK_SIZE: ' + str(len(block_data)))
       quit()
 
-    if block_number in range(0,TOTAL_NUM_BLOCKS): 
-      # ljust does the padding with zeros
-      putdata = bytearray(block_data.ljust(BLOCK_SIZE,b'\x00'))
-      server_num, phy_block_num = self.LocateBlock(block_number, len(self.block_servers))
+    if block_number in range(0, TOTAL_NUM_BLOCKS):
+      # calculate server/block locations
+      N = len(self.block_servers) # number of servers
+      server_num, phy_block_num = self.LocateData(block_number, N)
+      parity_server, parity_block = self.LocateParity(phy_block_num, N)
+
+      # Get old data
+      new_data = bytearray(block_data.ljust(BLOCK_SIZE,b'\x00'))
+      old_data = self.SingleGet(server_num, phy_block_num)
+      old_parity = self.SingleGet(parity_server, parity_block)
       
-      # call Put() method for all servers; code quits on any server failure 
-      try:
-        ret = self.block_servers[server_num].SinglePut(phy_block_num, putdata)
+      # Calculate new data
+      imd_parity = bytearray(BLOCK_SIZE)
+      new_parity = bytearray(BLOCK_SIZE)
 
-      except ConnectionRefusedError:
-        print(f"SERVER_DISCONNECTED PUT {server_num}")
+      for ii in range(0, BLOCK_SIZE):
+        imd_parity[ii] = old_data[ii] ^ new_data[ii]
+        new_parity[ii] = imd_parity[ii] ^ old_parity[ii]
 
-      return 0
+      # Store new data
+      self.SinglePut(server_num, phy_block_num, new_data)
+      self.SinglePut(parity_server, parity_block, new_parity)
 
     else:
-      logging.error('Put: Block out of range: ' + str(phy_block_num))
+      logging.error('Put: Block out of range: ' + str(block_number))
       quit()
 
-  ## Get: interface to read a raw block of data from block indexed by block number
+  ## SingleGet: interface to read a raw block of data from block indexed by block number
   ## Equivalent to the textbook's BLOCK_NUMBER_TO_BLOCK(b)
+
+  def SingleGet(self, server_num, phy_block_num): 
+    try:
+      # call server Get() method
+      data = self.block_servers[server_num].Get(phy_block_num)
+      return data
+
+    except ConnectionRefusedError:
+      print(f"SERVER_DISCONNECTED GET {server_num}")
+      rec_data = bytearray(BLOCK_SIZE)
+
+      # Get() from other servers in the same row and XOR them together
+      for other_server in range(0, len(self.block_servers)):
+        if other_server != server_num:
+          data = self.block_servers[other_server].Get(phy_block_num)
+
+          for ii in range(0, BLOCK_SIZE):
+            rec_data[ii] = rec_data[ii] ^ data[ii]  
+      
+      return rec_data
+
+
+  ## Get: (AKA Raid_Get): uses the RAID server model to Get() data from the server given a virtual block number
+  ## If server is down - will reconstruct data from other servers
 
   def Get(self, block_number):
 
     logging.debug ('Get: ' + str(block_number))
 
-    if block_number in range(0,TOTAL_NUM_BLOCKS):
-      # call Get() method one server at a time - returning if data is good
-      server_num, phy_block_num = self.LocateBlock(block_number, len(self.block_servers))
-
-      try:
-        data = self.block_servers[server_num].SingleGet(phy_block_num)
-
-        if data == -1:
-          print(f"CORRUPTED_BLOCK {block_number}")
-        else:
-          return bytearray(data)
-
-      except ConnectionRefusedError:
-        print(f"SERVER_DISCONNECTED GET {server_num}")
+    if block_number in range(0, TOTAL_NUM_BLOCKS):
+      server_num, phy_block_num = self.LocateData(block_number, len(self.block_servers))
+      data = self.SingleGet(server_num, phy_block_num)
+      
+      if data == -1:
+        print(f"CORRUPTED_BLOCK {block_number}")
+      else:
+        return bytearray(data)
 
       return -1
 
     logging.error('Get: Block number larger than TOTAL_NUM_BLOCKS: ' + str(block_number))
-    quit() 
+    quit()
+
 
   ## RSM: read and set memory equivalent
 
@@ -268,10 +323,10 @@ class DiskBlocks():
     logging.debug ('RSM: ' + str(block_number))
 
     if block_number in range(0, TOTAL_NUM_BLOCKS):
-      server_num, phy_block_num = self.LocateBlock(block_number, len(self.block_servers))
+      server_num, phy_block_num = self.LocateData(block_number, len(self.block_servers))
 
       try:
-        data = self.block_servers[server_num].SingleRSM(phy_block_num)
+        data = self.block_servers[server_num].RSM(phy_block_num)
         return bytearray(data)
 
       except ConnectionRefusedError:

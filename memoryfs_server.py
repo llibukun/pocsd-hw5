@@ -78,7 +78,7 @@ if __name__ == "__main__":
   # Create server
   server = SimpleXMLRPCServer(("127.0.0.1", PORT), requestHandler=RequestHandler) 
 
-  def SingleGet(block_number):
+  def Get(block_number):
     # debugging
     print("Invoked Server GET") 
 
@@ -94,12 +94,12 @@ if __name__ == "__main__":
       return result
 
     # On Checksum Error
-    print("SingleGet: Checksum error")
+    print("Get: Checksum error")
     return -1
 
-  server.register_function(SingleGet)
+  server.register_function(Get)
 
-  def SinglePut(block_number, data):
+  def Put(block_number, data):
     # debugging
     print("Invoked Server PUT")
 
@@ -107,9 +107,9 @@ if __name__ == "__main__":
     RawBlocks.checksum[block_number] = hashlib.md5(data.data)
     return 0
 
-  server.register_function(SinglePut)
+  server.register_function(Put)
 
-  def SingleRSM(block_number):
+  def RSM(block_number):
     # debugging
     print("Invoked Server RSM")
     
@@ -126,11 +126,11 @@ if __name__ == "__main__":
       return result
 
     # On Checksum Error
-    print("SingleRSM: Checksum error")
+    print("RSM: Checksum error")
     return -1
 
 
-  server.register_function(SingleRSM)
+  server.register_function(RSM)
 
   # Run the server's main loop
   print ("Running block server with nb=" + str(TOTAL_NUM_BLOCKS) + ", bs=" + str(BLOCK_SIZE) + " on port " + str(PORT))
