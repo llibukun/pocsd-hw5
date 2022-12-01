@@ -367,7 +367,7 @@ if __name__ == "__main__":
   ap.add_argument('-ni', '--max_num_inodes', type=int, help='an integer value')
   ap.add_argument('-is', '--inode_size', type=int, help='an integer value')
   
-  # add number of servers, startport and client id
+  # add number of servers and startport
   ap.add_argument('-ns', '--ns', type=int, help='an integer value')
   ap.add_argument('-startport', '--startport', type=int, help='an integer value')
   ap.add_argument('-cid', '--cid', type=int, help='an integer value')

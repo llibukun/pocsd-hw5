@@ -125,6 +125,9 @@ class DiskBlocks():
 
     # initialize XMLRPC client connection to N block servers
     self.block_servers = []
+
+    # keeps track of which server is bad
+    self.bad_server = -1
     
     # create N servers
     for i in range(0, N):
@@ -202,7 +205,7 @@ class DiskBlocks():
     server_num = phy_position % N
     phy_block_num = phy_position // N
 
-    print(f"Data location = server {server_num}, block_num {phy_block_num}")
+    # print(f"Data location = server {server_num}, block_num {phy_block_num}")
     return server_num, phy_block_num
 
 
@@ -214,7 +217,7 @@ class DiskBlocks():
     parity_block = phy_block_num
     parity_server = parity_block % N
 
-    print(f"Parity location = server {parity_server}, block_num {parity_block}")
+    # print(f"Parity location = server {parity_server}, block_num {parity_block}")
     return parity_server, parity_block
 
 
@@ -222,12 +225,14 @@ class DiskBlocks():
   ## Blocks are padded with zeroes up to BLOCK_SIZE
 
   def SinglePut(self, server_num, phy_block_num, block_data):
-    try:
-      # call server Put() method 
-      self.block_servers[server_num].Put(phy_block_num, block_data)
+    if server_num != self.bad_server:
+      try:
+        # call server Put() method 
+        self.block_servers[server_num].Put(phy_block_num, block_data)
 
-    except ConnectionRefusedError:
-      print(f"SERVER_DISCONNECTED PUT {server_num}")
+      except ConnectionRefusedError:
+        print(f"SERVER_DISCONNECTED PUT {server_num}")
+        self.bad_server = server_num # set this server as bad
 
     return 0
 
@@ -270,24 +275,38 @@ class DiskBlocks():
       logging.error('Put: Block out of range: ' + str(block_number))
       quit()
 
+  ## RecoverData: Will calculate the data lost from a bad server by getting from all other servers and XOR them together
+  ## Returns the recovered blcok of data
+
+  def RecoverData(self, server_num, phy_block_num): 
+    rec_data = bytearray(BLOCK_SIZE)
+
+    # Get() from other servers in the same row and XOR them together
+    for other_server in range(0, len(self.block_servers)):
+      if other_server != server_num:
+        data = self.block_servers[other_server].Get(phy_block_num)
+
+        for ii in range(0, BLOCK_SIZE):
+          rec_data[ii] = rec_data[ii] ^ data[ii]  
+    
+    # print(f"rec_data = {rec_data.decode(encoding='UTF-8',errors='ignore')}")
+    return rec_data
+
   ## RepairServer: Will repair a previously crashed server that has been brought back up using XORs from other servers
   ## No return value
 
-  def RepairServer(self, server_num): 
-    N = len(self.block_servers)
+  def RepairServer(self, server_num):
+    if server_num == self.bad_server:
+      SERVER_NUM_BLOCKS = TOTAL_NUM_BLOCKS//(len(self.block_servers)-1)
 
-    for phy_block_num in range(0, TOTAL_NUM_BLOCKS//(N-1)):
-      rec_data = bytearray(BLOCK_SIZE)
+      for phy_block_num in range(0, SERVER_NUM_BLOCKS):
+        rec_data = self.RecoverData(server_num, phy_block_num)
+        self.block_servers[server_num].Put(phy_block_num, rec_data)
 
-      # Get() from other servers in the same row and XOR them together
-      for other_server in range(0, N):
-        if other_server != server_num:
-          data = self.block_servers[other_server].Get(phy_block_num)
-          
-          for ii in range(0, BLOCK_SIZE):
-            rec_data[ii] = rec_data[ii] ^ data[ii]  
-      
-      self.block_servers[server_num].Put(phy_block_num, rec_data)
+      self.bad_server = -1 # put this server back in rotation
+
+    else:
+      print(f"Repair Failed: server {server_num} is not a broken server")
 
     return 0
 
@@ -296,24 +315,19 @@ class DiskBlocks():
   ## Equivalent to the textbook's BLOCK_NUMBER_TO_BLOCK(b)
 
   def SingleGet(self, server_num, phy_block_num): 
-    try:
-      # call server Get() method
-      data = self.block_servers[server_num].Get(phy_block_num)
-      return data
+    if server_num != self.bad_server:
+      try:
+        # call server Get() method
+        data = self.block_servers[server_num].Get(phy_block_num)
+        return data
 
-    except ConnectionRefusedError:
-      print(f"SERVER_DISCONNECTED GET {server_num}")
-      rec_data = bytearray(BLOCK_SIZE)
-
-      # Get() from other servers in the same row and XOR them together
-      for other_server in range(0, len(self.block_servers)):
-        if other_server != server_num:
-          data = self.block_servers[other_server].Get(phy_block_num)
-
-          for ii in range(0, BLOCK_SIZE):
-            rec_data[ii] = rec_data[ii] ^ data[ii]  
-      
-      return rec_data
+      except ConnectionRefusedError:
+        print(f"SERVER_DISCONNECTED GET {server_num}")
+        self.bad_server = server_num # set this server as bad
+        return self.RecoverData(server_num, phy_block_num)
+    
+    else:
+      return self.RecoverData(server_num, phy_block_num)
 
 
   ## Get: (AKA Raid_Get): uses the RAID server model to Get() data from the server given a virtual block number
@@ -329,10 +343,9 @@ class DiskBlocks():
       
       if data == -1:
         print(f"CORRUPTED_BLOCK {block_number}")
-      else:
-        return bytearray(data)
+        data = self.RecoverData(server_num, phy_block_num)
 
-      return -1
+      return data
 
     logging.error('Get: Block number larger than TOTAL_NUM_BLOCKS: ' + str(block_number))
     quit()

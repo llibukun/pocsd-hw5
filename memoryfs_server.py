@@ -11,7 +11,7 @@ import argparse
 import time
 import dbm
 import os.path
-import hashlib # for checksums
+import hashlib # checksums
 
 # For locks: RSM_UNLOCKED=0 , RSM_LOCKED=1 
 RSM_UNLOCKED = bytearray(b'\x00') * 1
@@ -71,7 +71,6 @@ if __name__ == "__main__":
   if args.cblk:
     CORRUPT_BLOCK = args.cblk
 
-
   # initialize blocks
   RawBlocks = DiskBlocks(TOTAL_NUM_BLOCKS, BLOCK_SIZE)
 
@@ -79,56 +78,41 @@ if __name__ == "__main__":
   server = SimpleXMLRPCServer(("127.0.0.1", PORT), requestHandler=RequestHandler) 
 
   def Get(block_number):
-    # debugging
-    print("Invoked -GET") 
-
-    # artificial decay
+    # emulated data decay
     if block_number == CORRUPT_BLOCK:
       RawBlocks.block[block_number][:4] = bytearray(b'\xFF\x00\xF0\x0F')
 
     result = RawBlocks.block[block_number]
-    # logging.debug('\n' + str((Rawblocks.block[block_number]).hex()))
-
-    # compare old and new checksum
-    if RawBlocks.checksum[block_number].digest() == hashlib.md5(result).digest():
+    # compare checksums
+    if RawBlocks.checksum[block_number].hexdigest() == hashlib.md5(result).hexdigest():
       return result
 
-    # On Checksum Error
-    print("Get: Checksum error")
+    # checksum error
     return -1
 
   server.register_function(Get)
 
   def Put(block_number, data):
-    # debugging
-    print("Invoked ---PUT")
-
+    # store data and checksum
     RawBlocks.block[block_number] = data.data
     RawBlocks.checksum[block_number] = hashlib.md5(data.data)
+
     return 0
 
   server.register_function(Put)
 
   def RSM(block_number):
-    # debugging
-    print("Invoked -----RSM")
-    
     # Get the RSM Block
     result = RawBlocks.block[block_number]
 
-    # compare old and new checksum
-    if RawBlocks.checksum[block_number].digest() == hashlib.md5(result).digest():
-      # Put RSM_LOCKED - do the RSM locking 
-      MYRSMLOCK = bytearray(RSM_LOCKED.ljust(BLOCK_SIZE,b'\x01'))
-      RawBlocks.block[block_number] = MYRSMLOCK
-      RawBlocks.checksum[block_number] = hashlib.md5(MYRSMLOCK)
-
+    # compare checksums
+    if RawBlocks.checksum[block_number].hexdigest() == hashlib.md5(result).hexdigest(): 
+      RawBlocks.block[block_number] = bytearray(RSM_LOCKED.ljust(BLOCK_SIZE,b'\x01'))
+      RawBlocks.checksum[block_number] = hashlib.md5(bytearray(RSM_LOCKED.ljust(BLOCK_SIZE,b'\x01')))
       return result
 
-    # On Checksum Error
-    print("RSM: Checksum error")
+    # checksum error
     return -1
-
 
   server.register_function(RSM)
 
