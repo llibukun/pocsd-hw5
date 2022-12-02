@@ -345,7 +345,7 @@ class DiskBlocks():
         print(f"CORRUPTED_BLOCK {block_number}")
         data = self.RecoverData(server_num, phy_block_num)
 
-      return data
+      return bytearray(data)
 
     logging.error('Get: Block number larger than TOTAL_NUM_BLOCKS: ' + str(block_number))
     quit()
