@@ -6,41 +6,18 @@ create f2
 append f2 file2contents
 cat f2
 ls
-lnh f1 lnhf1
-lns f1 lnsf1
 mkdir dir1
 create f3
 create f4
-create f5
-create f6
-create f7
-create f8
 mkdir dir2
-mkdir dir3
-mkdir dir4
-mkdir dir5
-mkdir dir6
 append f3 file3contents
 append f4 file4contents
-append f5 file5contents
-append f6 file6contents
-append f7 file7contents
-append f8 file8contents
 cd dir2
-create f10
-append f10 file10contents
-cd ../dir3
-create f11
-append f11 file11contents
-cd ../dir4
-create f12
-append f12 file12contents
-cat ../f4
-cat ../f5
-cat ../f6
+create f5
+append f5 file5contents
+cat f5
 cd ..
 rm f1
 rm f2
-rm f3
 ls
 exit

@@ -39,8 +39,5 @@ cat ../f4
 cat ../f5
 cat ../f6
 cd ..
-rm f1
-rm f2
-rm f3
 ls
 exit
