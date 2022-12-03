@@ -29,7 +29,9 @@ class DiskBlocks():
     # This class stores the raw block array
     self.block = []  
     # This stores the checksum for each block
-    self.checksum = {}  
+    self.checksum = {}
+    # performance analysis
+    self.request_count = 0
 
     # Initialize raw blocks 
     for i in range (0, total_num_blocks):
@@ -78,6 +80,10 @@ if __name__ == "__main__":
   server = SimpleXMLRPCServer(("127.0.0.1", PORT), requestHandler=RequestHandler) 
 
   def Get(block_number):
+    # performance analysis
+    RawBlocks.request_count += 1
+    print(f"number of requests handled: {RawBlocks.request_count}")
+
     # emulated data decay
     if block_number == CORRUPT_BLOCK:
       RawBlocks.block[block_number][:4] = bytearray(b'\xFF\x00\xF0\x0F')
@@ -93,6 +99,10 @@ if __name__ == "__main__":
   server.register_function(Get)
 
   def Put(block_number, data):
+    # performance analysis
+    RawBlocks.request_count += 1
+    print(f"number of requests handled: {RawBlocks.request_count}")
+
     # store data and checksum
     RawBlocks.block[block_number] = data.data
     RawBlocks.checksum[block_number] = hashlib.md5(data.data)
@@ -102,6 +112,10 @@ if __name__ == "__main__":
   server.register_function(Put)
 
   def RSM(block_number):
+    # performance analysis
+    RawBlocks.request_count += 1
+    print(f"number of requests handled: {RawBlocks.request_count}")
+
     # Get the RSM Block
     result = RawBlocks.block[block_number]
 

@@ -1,0 +1,27 @@
+Running the Server:
+
+# a) default fs - with 4 servers
+python3 memoryfs_server.py -p 8000 -nb 256 -bs 128 
+python3 memoryfs_server.py -p 8001 -nb 256 -bs 128
+python3 memoryfs_server.py -p 8002 -nb 256 -bs 128
+python3 memoryfs_server.py -p 8003 -nb 256 -bs 128
+
+# b) larger fs - with 4 servers
+python3 memoryfs_server.py -p 8000 -nb 2048 -bs 512
+python3 memoryfs_server.py -p 8001 -nb 2048 -bs 512
+python3 memoryfs_server.py -p 8002 -nb 2048 -bs 512
+python3 memoryfs_server.py -p 8003 -nb 2048 -bs 512
+
+# c) larger fs - with 4 servers - with corrupted block
+python3 memoryfs_server.py -p 8000 -nb 2048 -bs 512
+python3 memoryfs_server.py -p 8001 -nb 2048 -bs 512 
+python3 memoryfs_server.py -p 8002 -nb 2048 -bs 512 -cblk 2
+python3 memoryfs_server.py -p 8003 -nb 2048 -bs 512 
+
+Running the Client:
+
+# a) default fs
+python3 memoryfs_shell_rpc.py -nb 768 -ns 4 -cid 0 -startport 8000
+
+# b) larger fs
+python3 memoryfs_shell_rpc.py -nb 6144 -bs 512 -is 32 -ni 128 -ns 4 -cid 0 -startport 8000
